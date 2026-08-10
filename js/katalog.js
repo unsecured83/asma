@@ -1,0 +1,525 @@
+// ==========================================
+// UTILITAS KEAMANAN (XSS PROTECTION)
+// ==========================================
+function escapeHTML(str) {
+    if (str === null || str === undefined) return '';
+    return String(str).replace(/[&<>'"]/g, function(tag) {
+        const charsToReplace = { 
+            '&': '&amp;', 
+            '<': '&lt;', 
+            '>': '&gt;', 
+            "'": '&#39;', 
+            '"': '&quot;' 
+        };
+        return charsToReplace[tag] || tag;
+    });
+}
+
+// ==========================================
+// VARIABEL GLOBAL KATALOG & KERANJANG
+// ==========================================
+let currentProducts = [];
+let currentSearch = '';
+let globalSettings = {};
+
+let currentCategory = 'Semua';
+let shoppingCart = JSON.parse(localStorage.getItem('tokoku_cart')) || [];
+
+let currentPage = 1;
+const ITEMS_PER_PAGE = 20;
+
+const formatRupiah = (angka) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(angka);
+
+// ==========================================
+// 1. RENDER KATEGORI DINAMIS
+// ==========================================
+function renderKategori() {
+    const container = document.getElementById('categoryContainer');
+    container.innerHTML = ''; 
+    
+    const btnSemua = document.createElement('button');
+    btnSemua.onclick = function() { filterCategory('Semua', this); };
+    btnSemua.className = "category-btn whitespace-nowrap px-4 py-1.5 rounded-full text-sm font-medium bg-green-600 text-white shadow-sm transition-colors";
+    btnSemua.textContent = 'Semua';
+    container.appendChild(btnSemua);
+
+    if (globalSettings.kategori) {
+        const kategoriArray = globalSettings.kategori.split(',').map(k => k.trim()).filter(k => k);
+        kategoriArray.forEach(kat => {
+            const btn = document.createElement('button');
+            btn.onclick = function() { filterCategory(kat, this); };
+            btn.className = "category-btn whitespace-nowrap px-4 py-1.5 rounded-full text-sm font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors";
+            btn.textContent = kat;
+            container.appendChild(btn);
+        });
+    }
+}
+
+// ==========================================
+// 2. AMBIL DATA PENGATURAN TOKO (SUPABASE)
+// ==========================================
+async function fetchSettings() {
+    try {
+        const { data: pengaturanData, error } = await supabaseClient
+            .from('pengaturan')
+            .select('*')
+            .eq('id', 1)
+            .single();
+
+        if (error) throw error;
+        globalSettings = pengaturanData || {};
+        
+        const namaToko = globalSettings.nama_toko || "TokoKu";
+        document.getElementById('pageTitleDisplay').textContent = namaToko + " - Katalog";
+        document.getElementById('storeNameDisplay').textContent = namaToko;
+        document.getElementById('footerStoreName').textContent = namaToko;
+        
+        const waNumber = globalSettings.wa_admin || "6281234567890";
+        document.getElementById('headerWaLink').href = `https://wa.me/${waNumber}`;
+
+        if (globalSettings.logo_url) {
+            document.getElementById('headerLogoImg').src = globalSettings.logo_url;
+            document.getElementById('headerLogoImg').classList.remove('hidden');
+            document.getElementById('headerIcon').style.display = 'none';
+        }
+
+        if (globalSettings.link_ig) { 
+            document.getElementById('footerIgLink').href = globalSettings.link_ig; 
+            document.getElementById('footerIgLink').classList.remove('hidden'); 
+        }
+        if (globalSettings.link_fb) { 
+            document.getElementById('footerFbLink').href = globalSettings.link_fb; 
+            document.getElementById('footerFbLink').classList.remove('hidden'); 
+        }
+
+        if (globalSettings.banner_aktif) {
+            document.getElementById('bannerSection').classList.remove('hidden');
+            document.getElementById('bannerTitleDisplay').textContent = globalSettings.banner_title;
+            document.getElementById('bannerSubtitleDisplay').textContent = globalSettings.banner_subtitle;
+        }
+
+        if (!globalSettings.status_buka) {
+            document.getElementById('tokoTutupWarning').classList.remove('hidden');
+        }
+        
+        renderKategori(); 
+        fetchProducts();
+    } catch (err) { 
+        console.error("Gagal load pengaturan", err); 
+        fetchProducts(); 
+    }
+}
+
+// ==========================================
+// 3. AMBIL DATA KATALOG BARANG (SUPABASE)
+// ==========================================
+async function fetchProducts(page = 1, append = false, keyword = '') {
+    try {
+        if (page === 1 && !append) {
+            document.getElementById('productCount').textContent = "Memuat data...";
+            document.getElementById('productGrid').innerHTML = ''; 
+        }
+
+        const startIndex = (page - 1) * ITEMS_PER_PAGE;
+        const endIndex = startIndex + ITEMS_PER_PAGE - 1;
+
+        let query = supabaseClient
+            .from('produk')
+            .select('*', { count: 'exact' })
+            .order('created_at', { ascending: false })
+            .range(startIndex, endIndex);
+
+        if (keyword) {
+            query = query.or(`nama.ilike.%${keyword}%,kode.ilike.%${keyword}%`);
+        }
+        
+        if (currentCategory !== 'Semua') {
+            query = query.eq('kategori', currentCategory);
+        }
+
+        const { data, count, error } = await query;
+        if (error) throw error;
+        
+        const fetchedProducts = data.map(item => ({
+            id: item.kode, 
+            name: item.nama, 
+            price: parseInt(item.harga) || 0,
+            image: item.gambar || "https://placehold.co/400",
+            status: item.status,
+            varian: item.varian || ""
+        }));
+
+        if (append) { currentProducts = [...currentProducts, ...fetchedProducts]; } 
+        else { currentProducts = fetchedProducts; }
+        
+        const meta = { totalItems: count, totalPages: Math.ceil(count / ITEMS_PER_PAGE), currentPage: page };
+        renderProducts(currentProducts, meta);
+    } catch (error) { 
+        console.error("Gagal fetch produk:", error);
+        document.getElementById('productGrid').innerHTML = '<p class="text-red-500 col-span-full text-center">Gagal terhubung ke database.</p>'; 
+    }
+}
+
+// ==========================================
+// 4. RENDER UI & LOGIKA SEARCH/LOAD MORE
+// ==========================================
+const renderProducts = (products, meta) => {
+    const grid = document.getElementById('productGrid');
+    const emptyState = document.getElementById('emptyState');
+    const loadMoreContainer = document.getElementById('loadMoreContainer');
+    
+    grid.innerHTML = ''; 
+    
+    if (products.length === 0) {
+        grid.classList.add('hidden'); 
+        emptyState.classList.remove('hidden');
+        loadMoreContainer.classList.add('hidden');
+        document.getElementById('productCount').textContent = `0 barang`;
+        return;
+    } else {
+        grid.classList.remove('hidden'); 
+        emptyState.classList.add('hidden');
+    }
+    
+    const isTokoBuka = (globalSettings.status_buka === true || globalSettings.status_buka === undefined);
+    
+    products.forEach(product => {
+        const card = document.createElement('div');
+        const isHabis = product.status === 'habis'; 
+        const cardOpacity = isHabis ? 'opacity-60' : 'opacity-100';
+        card.className = `product-card bg-white border border-gray-200 overflow-hidden flex flex-col h-full ${cardOpacity}`;
+
+        const amanId = escapeHTML(product.id);
+        const amanName = escapeHTML(product.name);
+        const amanImage = escapeHTML(product.image);
+        const amanVarian = escapeHTML(product.varian);
+        
+        const jsSafeName = product.name.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+        const jsSafeVarian = product.varian.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+        const jsSafeId = String(product.id).replace(/'/g, "\\'").replace(/"/g, '&quot;');
+        const jsSafeImage = String(product.image).replace(/'/g, "\\'").replace(/"/g, '&quot;');
+        
+        let btnPesan = '';
+        if (!isTokoBuka) {
+            btnPesan = `<button disabled class="w-full bg-gray-300 text-gray-500 cursor-not-allowed text-xs sm:text-sm font-medium py-1.5 px-2 rounded-sm flex items-center justify-center gap-1.5">Toko Tutup</button>`;
+        } else if (isHabis) {
+            btnPesan = `<button disabled class="w-full bg-red-100 text-red-600 cursor-not-allowed text-xs sm:text-sm font-medium py-1.5 px-2 rounded-sm flex items-center justify-center gap-1.5">Stok Habis</button>`;
+        } else {
+            if (product.varian && product.varian.trim() !== '') {
+                btnPesan = `<button onclick="openVariantModal('${jsSafeId}', '${jsSafeName}', ${product.price}, '${jsSafeImage}', '${jsSafeVarian}')" class="w-full bg-green-100 hover:bg-green-600 hover:text-white text-green-700 text-xs sm:text-sm font-bold py-2 px-2 rounded-sm flex items-center justify-center gap-1.5 transition-colors"><i class="fa-solid fa-cart-plus"></i> +Keranjang</button>`;
+            } else {
+                btnPesan = `<button onclick="addToCart('${jsSafeId}', '${jsSafeName}', ${product.price}, '${jsSafeImage}', '')" class="w-full bg-green-100 hover:bg-green-600 hover:text-white text-green-700 text-xs sm:text-sm font-bold py-2 px-2 rounded-sm flex items-center justify-center gap-1.5 transition-colors"><i class="fa-solid fa-cart-plus"></i> +Keranjang</button>`;
+            }
+        }
+
+        const badgeHabis = isHabis ? `<div class="absolute inset-0 bg-white/40 flex items-center justify-center z-10"><span class="bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-sm uppercase tracking-wider">Habis</span></div>` : '';
+
+        // GUNAKAN VARIABEL AMAN DI SINI
+        card.innerHTML = `
+            <div class="aspect-w-1 aspect-h-1 w-full bg-gray-100 relative">
+                ${badgeHabis}
+                <img src="${amanImage}" loading="lazy" alt="${amanName}" class="w-full h-full object-cover">
+            </div>
+            <div class="p-2 sm:p-3 flex flex-col flex-1">
+                <p class="text-[10px] sm:text-xs font-mono text-gray-500 mb-0.5">${amanId}</p>
+                <h3 class="text-xs sm:text-sm text-gray-800 line-clamp-2 mb-1 flex-1">${amanName}</h3>
+                <p class="text-sm sm:text-base font-bold text-green-600 mb-3">${formatRupiah(product.price)}</p>
+                ${btnPesan}
+            </div>
+        `;
+        grid.appendChild(card);
+    });
+    
+    document.getElementById('productCount').textContent = `Menampilkan ${products.length} dari ${meta.totalItems} barang`;
+    
+    if (meta.currentPage < meta.totalPages) {
+        loadMoreContainer.classList.remove('hidden');
+        document.getElementById('btnLoadMore').innerHTML = 'Tampilkan Lebih Banyak'; 
+    } else {
+        loadMoreContainer.classList.add('hidden');
+    }
+};
+
+let searchTimeout;
+const executeSearch = (keyword) => {
+    currentSearch = keyword.trim(); 
+    
+    if (currentSearch === '') {
+        document.getElementById('searchIndicatorContainer').classList.add('hidden');
+    } else {
+        document.getElementById('searchKeywordText').textContent = currentSearch;
+        document.getElementById('searchIndicatorContainer').classList.remove('hidden');
+    }
+
+    currentPage = 1; 
+    clearTimeout(searchTimeout);
+    
+    searchTimeout = setTimeout(() => {
+        fetchProducts(currentPage, false, currentSearch);
+    }, 500); 
+};
+
+// Pastikan event listener dipasang dengan benar
+const btnLoadMore = document.getElementById('btnLoadMore');
+const newBtnLoadMore = btnLoadMore.cloneNode(true);
+btnLoadMore.parentNode.replaceChild(newBtnLoadMore, btnLoadMore);
+newBtnLoadMore.addEventListener('click', function() {
+    this.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Memuat...';
+    currentPage++;
+    fetchProducts(currentPage, true, currentSearch); 
+});
+
+document.getElementById('searchInput').addEventListener('input', (e) => executeSearch(e.target.value));
+
+window.filterCategory = (kategori, btnElement) => {
+    currentCategory = kategori;
+    currentPage = 1;
+    
+    document.querySelectorAll('.category-btn').forEach(btn => {
+        btn.classList.remove('bg-green-600', 'text-white', 'shadow-sm');
+        btn.classList.add('bg-gray-100', 'text-gray-600', 'hover:bg-gray-200');
+    });
+    btnElement.classList.remove('bg-gray-100', 'text-gray-600', 'hover:bg-gray-200');
+    btnElement.classList.add('bg-green-600', 'text-white', 'shadow-sm');
+
+    fetchProducts(currentPage, false, currentSearch);
+};
+
+// ==========================================
+// 5. LOGIKA KERANJANG & CHECKOUT
+// ==========================================
+function updateCartBadge() {
+    const badge = document.getElementById('cartBadge');
+    const totalItems = shoppingCart.reduce((sum, item) => sum + item.qty, 0);
+    if(totalItems > 0) {
+        badge.textContent = totalItems;
+        badge.classList.remove('hidden');
+    } else {
+        badge.classList.add('hidden');
+    }
+    localStorage.setItem('tokoku_cart', JSON.stringify(shoppingCart));
+}
+
+window.addToCart = (id, nama, harga, gambar, varian = '') => {
+    const cartItemId = varian ? `${id}-${varian}` : id;
+    
+    const existingItem = shoppingCart.find(item => (item.cartItemId || item.id) === cartItemId);
+    if (existingItem) {
+        existingItem.qty += 1;
+    } else {
+        shoppingCart.push({ cartItemId, id, nama, harga, gambar, qty: 1, varian });
+    }
+    updateCartBadge();
+    renderCartUI();
+    
+    const badge = document.getElementById('cartBadge');
+    badge.classList.add('scale-150');
+    setTimeout(() => badge.classList.remove('scale-150'), 200);
+};
+
+window.removeFromCart = (cartItemId) => {
+    shoppingCart = shoppingCart.filter(item => item.cartItemId !== cartItemId);
+    updateCartBadge();
+    renderCartUI();
+};
+
+window.changeQty = (cartItemId, delta) => {
+    const item = shoppingCart.find(item => item.cartItemId === cartItemId);
+    if (item) {
+        item.qty += delta;
+        if (item.qty <= 0) window.removeFromCart(cartItemId);
+        else { updateCartBadge(); renderCartUI(); }
+    }
+};
+
+window.openVariantModal = (id, nama, harga, gambar, varianString) => {
+    document.getElementById('varModalName').textContent = nama;
+    document.getElementById('varModalPrice').textContent = formatRupiah(harga);
+    document.getElementById('varModalImg').src = gambar;
+    
+    const container = document.getElementById('variantButtonsContainer');
+    container.innerHTML = ''; 
+    
+    const varianArray = varianString.split(',').map(v => v.trim()).filter(v => v);
+    
+    varianArray.forEach(varian => {
+        const btn = document.createElement('button');
+        btn.className = "px-4 py-2 border border-green-500 text-green-600 rounded-md text-sm font-medium hover:bg-green-50 focus:ring-2 focus:ring-green-300 transition-colors";
+        btn.textContent = varian;
+        btn.onclick = () => {
+            addToCart(id, nama, harga, gambar, varian);
+            closeVariantModal();
+        };
+        container.appendChild(btn);
+    });
+
+    const modal = document.getElementById('variantModal');
+    const panel = document.getElementById('variantPanel');
+    modal.classList.remove('hidden');
+    setTimeout(() => { panel.classList.remove('scale-95', 'opacity-0'); }, 10);
+};
+
+window.closeVariantModal = () => {
+    const modal = document.getElementById('variantModal');
+    const panel = document.getElementById('variantPanel');
+    panel.classList.add('scale-95', 'opacity-0');
+    setTimeout(() => { modal.classList.add('hidden'); }, 200);
+};
+
+window.toggleCart = () => {
+    const modal = document.getElementById('cartModal');
+    const panel = document.getElementById('cartPanel');
+    if (modal.classList.contains('hidden')) {
+        modal.classList.remove('hidden');
+        setTimeout(() => panel.classList.remove('translate-x-full'), 10);
+        renderCartUI();
+    } else {
+        panel.classList.add('translate-x-full');
+        setTimeout(() => modal.classList.add('hidden'), 300);
+    }
+};
+
+// REVISI UNTUK FUNGSI renderCartUI()
+function renderCartUI() {
+    const container = document.getElementById('cartItemsContainer');
+    const totalDisplay = document.getElementById('cartTotalDisplay');
+    const btnCheckout = document.getElementById('btnCheckout');
+
+    container.innerHTML = '';
+    let totalHarga = 0;
+
+    if (shoppingCart.length === 0) {
+        container.innerHTML = `<div class="text-center text-gray-500 py-10"><i class="fa-solid fa-basket-shopping text-4xl mb-3 text-gray-300"></i><br>Keranjang masih kosong.</div>`;
+        totalDisplay.textContent = 'Rp 0';
+        btnCheckout.disabled = true;
+        btnCheckout.classList.replace('bg-wa', 'bg-gray-400');
+        btnCheckout.classList.remove('hover:bg-wa-dark');
+        return;
+    }
+
+    btnCheckout.disabled = false;
+    btnCheckout.classList.replace('bg-gray-400', 'bg-wa');
+    btnCheckout.classList.add('hover:bg-wa-dark');
+
+    shoppingCart.forEach(item => {
+        const subtotal = item.harga * item.qty;
+        totalHarga += subtotal;
+        
+        // PINDAHKAN SANITASI KE SINI DAN GUNAKAN 'item'
+        const amanId = escapeHTML(item.id);
+        const amanNama = escapeHTML(item.nama);
+        const amanGambar = escapeHTML(item.gambar);
+        const amanVarian = escapeHTML(item.varian);
+        
+        const textVarian = amanVarian ? `<span class="bg-gray-100 text-gray-600 text-[10px] px-2 py-0.5 rounded ml-2">Varian: ${amanVarian}</span>` : '';
+        const idUnik = item.cartItemId || item.id;
+        const jsSafeIdUnik = String(idUnik).replace(/'/g, "\\'").replace(/"/g, '&quot;');
+        
+        // GUNAKAN VARIABEL AMAN DI DALAM TEMPLATE HTML INI
+        container.innerHTML += `
+        <div class="flex gap-3 bg-white p-3 border rounded-lg shadow-sm">
+            <img src="${amanGambar}" class="w-16 h-16 object-cover rounded-md border">
+            <div class="flex-1 flex flex-col justify-between">
+                <div class="flex justify-between items-start">
+                    <h4 class="text-sm font-semibold text-gray-800 line-clamp-2">${amanNama} ${textVarian}</h4>
+                    <button onclick="removeFromCart('${jsSafeIdUnik}')" class="text-red-400 hover:text-red-600 p-1"><i class="fa-solid fa-trash-can text-sm"></i></button>
+                </div>
+                <div class="text-xs font-mono text-gray-500">${amanId}</div>
+                <div class="flex justify-between items-center mt-1">
+                    <span class="text-sm font-bold text-green-600">${formatRupiah(item.harga)}</span>
+                    <div class="flex items-center gap-2 bg-gray-100 rounded-lg p-1">
+                        <button onclick="changeQty('${jsSafeIdUnik}', -1)" class="w-6 h-6 flex items-center justify-center bg-white rounded shadow-sm text-gray-600 font-bold">-</button>
+                        <span class="text-sm font-bold w-4 text-center">${item.qty}</span>
+                        <button onclick="changeQty('${jsSafeIdUnik}', 1)" class="w-6 h-6 flex items-center justify-center bg-white rounded shadow-sm text-gray-600 font-bold">+</button>
+                    </div>
+                </div>
+            </div>
+        </div>`;
+    });
+    totalDisplay.textContent = formatRupiah(totalHarga);
+}
+
+// ==========================================
+// UPDATE: LOGIKA CHECKOUT (VALIDASI SERVER-SIDE)
+// ==========================================
+window.checkoutWhatsApp = async () => {
+    if(shoppingCart.length === 0) return;
+
+    // 1. Ubah UI Tombol agar pengguna tahu sistem sedang memproses
+    const btnCheckout = document.getElementById('btnCheckout');
+    const originalText = btnCheckout.innerHTML;
+    btnCheckout.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Memverifikasi Harga...';
+    btnCheckout.disabled = true;
+
+    try {
+        // 2. Ekstrak semua ID (kode) barang unik dari keranjang pengguna
+        const productIds = [...new Set(shoppingCart.map(item => item.id))];
+
+        // 3. Tarik data HARGA & STATUS ASLI dari database Supabase
+        const { data: realProducts, error } = await supabaseClient
+            .from('produk')
+            .select('kode, harga, status, nama')
+            .in('kode', productIds);
+
+        if (error) throw error;
+
+        const waTarget = globalSettings.wa_admin || "6281234567890";
+        let teksPesan = `*Halo Admin ${globalSettings.nama_toko || 'Toko'}, saya mau order pesanan berikut:*\n\n`;
+        
+        let totalHargaReal = 0;
+        let adaBarangHabis = false;
+
+        // Buat map/kamus data asli untuk pencarian cepat
+        const dbProductMap = {};
+        realProducts.forEach(p => { dbProductMap[p.kode] = p; });
+
+        // 4. Bangun ulang nota berdasarkan Data Asli
+        shoppingCart.forEach((item, index) => {
+            const realData = dbProductMap[item.id];
+            
+            // Jika barang ternyata sudah dihapus oleh admin atau statusnya habis
+            if (!realData || realData.status === 'habis') {
+                adaBarangHabis = true;
+                teksPesan += `${index + 1}. *~${item.nama}~* (MAAF, BARANG HABIS/DIHAPUS)\n\n`;
+                return; // Lewati perhitungan harga
+            }
+
+            // GUNAKAN HARGA ASLI DARI DATABASE, BUKAN DARI LOCAL STORAGE
+            const hargaAsli = parseInt(realData.harga);
+            const subtotal = hargaAsli * item.qty;
+            totalHargaReal += subtotal;
+            
+            teksPesan += `${index + 1}. *${realData.nama} ${item.varian ? '(*Varian: ' + item.varian + '*)' : ''}*\n`;
+            teksPesan += `   Kode: ${realData.kode}\n`;
+            teksPesan += `   Jumlah: ${item.qty} x ${formatRupiah(hargaAsli)}\n`;
+            teksPesan += `   Subtotal: ${formatRupiah(subtotal)}\n\n`;
+        });
+
+        // 5. Tambahkan peringatan jika ada barang yang tidak valid
+        if(adaBarangHabis) {
+            teksPesan += `_Catatan: Beberapa barang di keranjang saya ternyata sudah habis/tidak tersedia._\n\n`;
+        }
+
+        teksPesan += `*TOTAL PEMBAYARAN: ${formatRupiah(totalHargaReal)}*\n\n`;
+        teksPesan += `Mohon instruksi pembayarannya. Terima kasih.`;
+        
+        // 6. Buka jendela WhatsApp
+        window.open(`https://wa.me/${waTarget}?text=${encodeURIComponent(teksPesan)}`, '_blank');
+        
+    } catch (err) {
+        console.error("Gagal verifikasi harga:", err);
+        alert("Terjadi kesalahan saat memverifikasi keranjang. Pastikan koneksi internet stabil.");
+    } finally {
+        // Kembalikan tombol seperti semula
+        btnCheckout.innerHTML = originalText;
+        btnCheckout.disabled = false;
+    }
+};
+
+// ==========================================
+// INISIALISASI SAAT HALAMAN DIMUAT
+// ==========================================
+document.addEventListener('DOMContentLoaded', () => {
+    fetchSettings();
+    updateCartBadge();
+});
