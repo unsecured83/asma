@@ -214,11 +214,10 @@ const renderProducts = (products, meta) => {
 
         const badgeHabis = isHabis ? `<div class="absolute inset-0 bg-white/40 flex items-center justify-center z-10"><span class="bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-sm uppercase tracking-wider">Habis</span></div>` : '';
 
-        // GUNAKAN VARIABEL AMAN DI SINI
         card.innerHTML = `
-            <div class="aspect-w-1 aspect-h-1 w-full bg-gray-100 relative">
+            <div class="w-full aspect-square overflow-hidden bg-gray-100 border-b relative">
                 ${badgeHabis}
-                <img src="${amanImage}" loading="lazy" alt="${amanName}" class="w-full h-full object-cover">
+                <img src="${amanImage}" alt="${amanName}" loading="lazy" class="w-full h-full object-cover object-center transition-transform duration-300 hover:scale-105">
             </div>
             <div class="p-2 sm:p-3 flex flex-col flex-1">
                 <p class="text-[10px] sm:text-xs font-mono text-gray-500 mb-0.5">${amanId}</p>
