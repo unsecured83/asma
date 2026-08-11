@@ -769,11 +769,19 @@ document.getElementById('formTambahBarang').addEventListener('submit', async fun
             
             if (uploadError) throw uploadError;
 
-            const { data: publicUrlData } = supabaseClient.storage
+             const { data: publicUrlData } = supabaseClient.storage
                 .from('katalog-gambar')
                 .getPublicUrl(fileName);
             
-            finalImageUrl = publicUrlData.publicUrl + "?t=" + Date.now();
+            // Modifikasi URL asli Supabase menjadi URL Proksi Internal
+            const originalUrl = publicUrlData.publicUrl;
+            const proxyUrl = originalUrl.replace(
+                'https://ydxffmteemrtaeenlaal.supabase.co/storage/v1/object/public',
+                'https://asmakwagean.my.id/cdn'
+            );
+
+            // Simpan URL proksi ke dalam variabel akhir
+            finalImageUrl = proxyUrl + "?t=" + Date.now();
 
         } catch (err) {
             Swal.fire('Error!', 'Gagal mengunggah gambar ke Cloud.', 'error');
