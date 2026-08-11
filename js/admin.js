@@ -275,7 +275,7 @@ function renderMasterKategori() {
         const jsSafeKat = kat.replace(/'/g, "\\'").replace(/"/g, '&quot;');
         
         const span = document.createElement('span');
-        span.className = "px-3 py-1.5 bg-green-50 ... group";
+        span.className = "px-3 py-1.5 bg-green-50 hover:bg-green-100 text-green-700 text-sm font-medium rounded-md flex items-center gap-2 border border-green-200 transition-colors shadow-sm group";
         span.innerHTML = `
             ${amanKat}
             <div class="flex items-center gap-1.5 ml-1 border-l border-green-300 pl-2.5">
@@ -657,7 +657,13 @@ async function saveSettings(e, buttonText) {
             const { error: uploadError } = await supabaseClient.storage.from('katalog-gambar').upload(fileName, logoBlob, { upsert: true });
             if (uploadError) throw uploadError;
             const { data: publicUrlData } = supabaseClient.storage.from('katalog-gambar').getPublicUrl(fileName);
-            finalLogoUrl = publicUrlData.publicUrl;
+
+            // --- MODIFIKASI URL PROKSI UNTUK LOGO ---
+            let proxyLogoUrl = publicUrlData.publicUrl.replace(
+                'https://ydxffmteemrtaeenlaal.supabase.co/storage/v1/object/public',
+                'https://asmakwagean.my.id/cdn'
+            );
+            finalLogoUrl = proxyLogoUrl + "?t=" + Date.now();
         } catch (err) {
             alert("Gagal mengunggah logo: " + err.message);
             btnSubmit.innerHTML = originalText; btnSubmit.disabled = false;
@@ -769,19 +775,16 @@ document.getElementById('formTambahBarang').addEventListener('submit', async fun
             
             if (uploadError) throw uploadError;
 
-             const { data: publicUrlData } = supabaseClient.storage
+            const { data: publicUrlData } = supabaseClient.storage
                 .from('katalog-gambar')
                 .getPublicUrl(fileName);
             
-            // Modifikasi URL asli Supabase menjadi URL Proksi Internal
-            const originalUrl = publicUrlData.publicUrl;
-            const proxyUrl = originalUrl.replace(
+            // --- MODIFIKASI URL PROKSI UNTUK GAMBAR BARANG ---
+            let proxyImageUrl = publicUrlData.publicUrl.replace(
                 'https://ydxffmteemrtaeenlaal.supabase.co/storage/v1/object/public',
                 'https://asmakwagean.my.id/cdn'
             );
-
-            // Simpan URL proksi ke dalam variabel akhir
-            finalImageUrl = proxyUrl + "?t=" + Date.now();
+            finalImageUrl = proxyImageUrl + "?t=" + Date.now();
 
         } catch (err) {
             Swal.fire('Error!', 'Gagal mengunggah gambar ke Cloud.', 'error');
