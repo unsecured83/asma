@@ -215,7 +215,7 @@ const renderProducts = (products, meta) => {
         const badgeHabis = isHabis ? `<div class="absolute inset-0 bg-white/40 flex items-center justify-center z-10"><span class="bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-sm uppercase tracking-wider">Habis</span></div>` : '';
 
         card.innerHTML = `
-            <div class="w-full aspect-square overflow-hidden bg-gray-100 border-b relative">
+            <div class="w-full overflow-hidden bg-gray-100 border-b relative" style="aspect-ratio: 1 / 1;">
                 ${badgeHabis}
                 <img src="${amanImage}" alt="${amanName}" loading="lazy" class="w-full h-full object-cover object-center transition-transform duration-300 hover:scale-105">
             </div>
