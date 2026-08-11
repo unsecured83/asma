@@ -275,7 +275,7 @@ function renderMasterKategori() {
         const jsSafeKat = kat.replace(/'/g, "\\'").replace(/"/g, '&quot;');
         
         const span = document.createElement('span');
-        span.className = "px-3 py-1.5 bg-green-50 hover:bg-green-100 text-green-700 text-sm font-medium rounded-md flex items-center gap-2 border border-green-200 transition-colors shadow-sm group";
+        span.className = "inline-flex items-center px-3 py-1.5 bg-green-50 hover:bg-green-100 text-green-700 text-sm font-medium rounded-md border border-green-300 transition-colors shadow-sm group cursor-default";
         span.innerHTML = `
             ${amanKat}
             <div class="flex items-center gap-1.5 ml-1 border-l border-green-300 pl-2.5">
