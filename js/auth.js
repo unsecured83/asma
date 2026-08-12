@@ -21,7 +21,6 @@ async function loadPublicLogo() {
             document.getElementById('loginLogoImg').src = data.logo_url;
             document.getElementById('loginLogoImg').classList.remove('hidden');
             document.getElementById('loginIcon').style.display = 'none';
-<<<<<<< HEAD
             
             let favicon = document.querySelector("link[rel~='icon']");
             if (!favicon) {
@@ -30,8 +29,6 @@ async function loadPublicLogo() {
                 document.head.appendChild(favicon);
             }
             favicon.href = data.logo_url;
-=======
->>>>>>> cff45be5d1f82ceee15ea1464392710ba0078d81
         }
     } catch (e) {
         console.log("Logo gagal dimuat, menggunakan ikon default.");

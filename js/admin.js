@@ -620,7 +620,6 @@ async function loadSettings() {
                 document.getElementById('sidebarLogo').src = data.logo_url;
                 document.getElementById('previewLogoPengaturan').src = data.logo_url;
                 if (document.getElementById('profilLogo')) document.getElementById('profilLogo').src = data.logo_url;
-<<<<<<< HEAD
                 
                 let favicon = document.querySelector("link[rel~='icon']");
                 if (!favicon) {
@@ -629,8 +628,6 @@ async function loadSettings() {
                     document.head.appendChild(favicon);
                 }
                 favicon.href = data.logo_url;
-=======
->>>>>>> cff45be5d1f82ceee15ea1464392710ba0078d81
             }
 
             globalSettings = data; 

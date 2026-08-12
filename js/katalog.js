@@ -81,7 +81,6 @@ async function fetchSettings() {
             document.getElementById('headerLogoImg').src = globalSettings.logo_url;
             document.getElementById('headerLogoImg').classList.remove('hidden');
             document.getElementById('headerIcon').style.display = 'none';
-<<<<<<< HEAD
             
             let favicon = document.querySelector("link[rel~='icon']");
             if (!favicon) {
@@ -90,8 +89,6 @@ async function fetchSettings() {
                 document.head.appendChild(favicon);
             }
             favicon.href = globalSettings.logo_url;
-=======
->>>>>>> cff45be5d1f82ceee15ea1464392710ba0078d81
         }
 
         if (globalSettings.link_ig) { 
