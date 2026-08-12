@@ -118,8 +118,10 @@
 
     <!-- Navigasi Kategori -->
     <div class="bg-white shadow-sm border-b border-gray-200 sticky z-40" style="top: 72px;">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 md:py-3">
-            <div class="flex gap-2 overflow-x-auto hide-scrollbar" id="categoryContainer">
+        <!-- HAPUS px-4 sm:px-6 lg:px-8 dari baris ini -->
+        <div class="max-w-7xl mx-auto py-2 md:py-3">
+            <!-- PINDAHKAN px-4 sm:px-6 lg:px-8 ke baris ini (ke dalam div categoryContainer) -->
+            <div class="flex gap-2 overflow-x-auto hide-scrollbar px-4 sm:px-6 lg:px-8" id="categoryContainer">
                 <!-- Tombol-tombol akan di-generate otomatis oleh Javascript di sini -->
             </div>
         </div>
