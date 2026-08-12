@@ -81,7 +81,6 @@ async function fetchSettings() {
             document.getElementById('headerLogoImg').src = globalSettings.logo_url;
             document.getElementById('headerLogoImg').classList.remove('hidden');
             document.getElementById('headerIcon').style.display = 'none';
-            document.getElementById('favicon').href = globalSettings.logo_url;
         }
 
         if (globalSettings.link_ig) { 
