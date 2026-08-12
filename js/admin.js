@@ -859,11 +859,13 @@ async function hapusBarang(kode) {
         try {
             const item = adminProductsData.find(p => p.kode === kode);
             
-            if (item && item.gambar && item.gambar.includes('supabase.co')) {
-                const namaFile = item.gambar.split('/').pop();
+            if (item && item.gambar) {
+                const namaFileDenganQuery = item.gambar.split('/').pop();
+                const namaFileAsli = namaFileDenganQuery.split('?')[0];
+                
                 const { error: storageError } = await supabaseClient.storage
                     .from('katalog-gambar')
-                    .remove([namaFile]);
+                    .remove([namaFileAsli]);
                     
                 if (storageError) console.warn("Peringatan: Gagal menghapus gambar fisik:", storageError);
             }
