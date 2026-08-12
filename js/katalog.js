@@ -81,6 +81,7 @@ async function fetchSettings() {
             document.getElementById('headerLogoImg').src = globalSettings.logo_url;
             document.getElementById('headerLogoImg').classList.remove('hidden');
             document.getElementById('headerIcon').style.display = 'none';
+            document.getElementById('favicon').href = globalSettings.logo_url;
         }
 
         if (globalSettings.link_ig) { 
@@ -476,19 +477,25 @@ window.checkoutWhatsApp = async () => {
         shoppingCart.forEach((item, index) => {
             const realData = dbProductMap[item.id];
             
-            // Jika barang ternyata sudah dihapus oleh admin atau statusnya habis
             if (!realData || realData.status === 'habis') {
                 adaBarangHabis = true;
-                teksPesan += `${index + 1}. *~${item.nama}~* (MAAF, BARANG HABIS/DIHAPUS)\n\n`;
-                return; // Lewati perhitungan harga
+                teksPesan += `${index + 1}. ~${item.nama.trim()}~ (MAAF, BARANG HABIS/DIHAPUS)\n\n`;
+                return; 
             }
 
-            // GUNAKAN HARGA ASLI DARI DATABASE, BUKAN DARI LOCAL STORAGE
             const hargaAsli = parseInt(realData.harga);
             const subtotal = hargaAsli * item.qty;
             totalHargaReal += subtotal;
             
-            teksPesan += `${index + 1}. *${realData.nama} ${item.varian ? '(*Varian: ' + item.varian + '*)' : ''}*\n`;
+            // PERBAIKAN LOGIKA TEKS TEBAL & MIRING WHATSAPP
+            let namaBersih = realData.nama.trim();
+            if (item.varian) {
+                // Nama ditebalkan (*), varian dimiringkan (_) agar tidak tabrakan
+                teksPesan += `${index + 1}. *${namaBersih}* _(Varian: ${item.varian.trim()})_\n`;
+            } else {
+                teksPesan += `${index + 1}. *${namaBersih}*\n`;
+            }
+            
             teksPesan += `   Kode: ${realData.kode}\n`;
             teksPesan += `   Jumlah: ${item.qty} x ${formatRupiah(hargaAsli)}\n`;
             teksPesan += `   Subtotal: ${formatRupiah(subtotal)}\n\n`;
