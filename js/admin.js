@@ -813,9 +813,12 @@ document.getElementById('formTambahBarang').addEventListener('submit', async fun
             const { error: dbError } = await supabaseClient.from('produk').update(produkData).eq('kode', editingKode);
             if (dbError) throw dbError;
             
-            if (isNewImageUploaded && oldImageUrl && oldImageUrl.includes('supabase.co')) {
-                const oldFileName = oldImageUrl.split('/').pop();
-                supabaseClient.storage.from('katalog-gambar').remove([oldFileName])
+            // PERBAIKAN: Bersihkan parameter '?t=' untuk gambar lama yang akan ditimpa
+            if (isNewImageUploaded && oldImageUrl) {
+                const oldFileNameDenganQuery = oldImageUrl.split('/').pop();
+                const oldFileNameAsli = oldFileNameDenganQuery.split('?')[0];
+                
+                supabaseClient.storage.from('katalog-gambar').remove([oldFileNameAsli])
                     .then(({error}) => { 
                         if(error) console.warn("Peringatan: Gagal membersihkan gambar lama:", error); 
                     });
