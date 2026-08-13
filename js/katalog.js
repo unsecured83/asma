@@ -426,8 +426,14 @@ function renderCartUI() {
         btnCheckout.disabled = true;
         btnCheckout.classList.replace('bg-wa', 'bg-gray-400');
         btnCheckout.classList.remove('hover:bg-wa-dark');
+        
+        // TAMBAHKAN INI: Sembunyikan form jika keranjang kosong
+        document.getElementById('checkoutForm').classList.add('hidden'); 
         return;
     }
+
+    // TAMBAHKAN INI: Tampilkan form jika ada barang
+    document.getElementById('checkoutForm').classList.remove('hidden'); 
 
     btnCheckout.disabled = false;
     btnCheckout.classList.replace('bg-gray-400', 'bg-wa');
@@ -477,17 +483,27 @@ function renderCartUI() {
 window.checkoutWhatsApp = async () => {
     if(shoppingCart.length === 0) return;
 
-    // 1. Ubah UI Tombol agar pengguna tahu sistem sedang memproses
+    // --- 1. VALIDASI FORMULIR ---
+    const custName = document.getElementById('custName').value.trim();
+    const custPhone = document.getElementById('custPhone').value.trim();
+    const custAddress = document.getElementById('custAddress').value.trim();
+
+    if (!custName || !custPhone || !custAddress) {
+        alert('Mohon isi Nama, No. WhatsApp, dan Alamat Lengkap Anda sebelum melanjutkan ke Checkout.');
+        return; // Hentikan proses jika form belum lengkap
+    }
+
+    // --- 2. SIMPAN DATA PELANGGAN LOKAL ---
+    // Agar pembeli tidak perlu mengetik ulang saat belanja lagi besok
+    localStorage.setItem('tokoku_customer', JSON.stringify({ nama: custName, phone: custPhone, alamat: custAddress }));
+
     const btnCheckout = document.getElementById('btnCheckout');
     const originalText = btnCheckout.innerHTML;
     btnCheckout.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Memverifikasi Harga...';
     btnCheckout.disabled = true;
 
     try {
-        // 2. Ekstrak semua ID (kode) barang unik dari keranjang pengguna
         const productIds = [...new Set(shoppingCart.map(item => item.id))];
-
-        // 3. Tarik data HARGA & STATUS ASLI dari database Supabase
         const { data: realProducts, error } = await supabaseClient
             .from('produk')
             .select('kode, harga, status, nama')
@@ -496,7 +512,17 @@ window.checkoutWhatsApp = async () => {
         if (error) throw error;
 
         const waTarget = globalSettings.wa_admin || "6281234567890";
+        
+        // --- 3. MODIFIKASI TEKS NOTA WHATSAPP ---
         let teksPesan = `*Halo Admin ${globalSettings.nama_toko || 'Toko'}, saya mau order pesanan berikut:*\n\n`;
+        
+        // Sisipkan Data Pengiriman
+        teksPesan += `*-- DATA PENGIRIMAN --*\n`;
+        teksPesan += `📋 Nama: ${custName}\n`;
+        teksPesan += `📞 No. WA: ${custPhone}\n`;
+        teksPesan += `📬 Alamat: ${custAddress}\n\n`;
+        
+        teksPesan += `*-- DETAIL PESANAN --*\n`;
         
         let totalHargaReal = 0;
         let adaBarangHabis = false;
@@ -560,4 +586,12 @@ window.checkoutWhatsApp = async () => {
 document.addEventListener('DOMContentLoaded', () => {
     fetchSettings();
     updateCartBadge();
+    
+    // --- FITUR AUTO-FILL FORMULIR PELANGGAN ---
+    const savedCust = JSON.parse(localStorage.getItem('tokoku_customer'));
+    if (savedCust) {
+        if (document.getElementById('custName')) document.getElementById('custName').value = savedCust.nama || '';
+        if (document.getElementById('custPhone')) document.getElementById('custPhone').value = savedCust.phone || '';
+        if (document.getElementById('custAddress')) document.getElementById('custAddress').value = savedCust.alamat || '';
+    }
 });
