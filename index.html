@@ -92,33 +92,58 @@
                 <div class="text-center text-gray-500 py-10">Keranjang masih kosong.</div>
             </div>
 
-            <!-- FORM DATA PEMBELI (BARU) -->
-            <div id="checkoutForm" class="p-4 border-t bg-white space-y-3 hidden">
-                <h3 class="text-sm font-bold text-gray-800 mb-1 border-b pb-1"><i class="fa-solid fa-truck-fast mr-1 text-green-600"></i> Data Pengiriman</h3>
-                <div>
-                    <label class="block text-[11px] font-semibold text-gray-700 mb-1">Nama Lengkap *</label>
-                    <input type="text" id="custName" class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-green-500 focus:border-green-500" placeholder="Cth: Budi Santoso" required>
-                </div>
-                <div>
-                    <label class="block text-[11px] font-semibold text-gray-700 mb-1">No. WhatsApp Aktif *</label>
-                    <input type="number" id="custPhone" class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-green-500 focus:border-green-500" placeholder="Cth: 08123456789" required>
-                </div>
-                <div>
-                    <label class="block text-[11px] font-semibold text-gray-700 mb-1">Alamat Lengkap *</label>
-                    <textarea id="custAddress" rows="2" class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-green-500 focus:border-green-500" placeholder="Jalan, RT/RW, Desa, Kecamatan, Kab/Kota" required></textarea>
-                </div>
-            </div>
-
             <!-- Total & Checkout -->
             <div class="p-4 border-t bg-gray-50">
                 <div class="flex justify-between items-center mb-4">
                     <span class="text-gray-600 font-medium">Total Pembayaran:</span>
                     <span id="cartTotalDisplay" class="text-xl font-bold text-green-600">Rp 0</span>
                 </div>
-                <button onclick="checkoutWhatsApp()" id="btnCheckout" class="w-full bg-wa hover:bg-wa-dark text-white font-bold py-3 px-4 rounded-lg flex justify-center items-center gap-2 shadow-md" disabled>
-                    <i class="fa-brands fa-whatsapp text-xl"></i> Checkout via WhatsApp
+                <button onclick="openCheckoutForm()" id="btnCheckout" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg flex justify-center items-center gap-2 shadow-md" disabled>
+                    <i class="fa-solid fa-arrow-right text-xl"></i> Isi Data Pengiriman
                 </button>
             </div>
+        </div> 
+    </div> 
+
+    <!-- Modal Formulir Pengiriman (SUDAH DI LUAR KERANJANG) -->
+    <div id="checkoutFormModal" class="fixed inset-0 z-[60] hidden flex items-center justify-center">
+        <!-- Background Gelap -->
+        <div class="absolute inset-0 bg-black bg-opacity-60" onclick="closeCheckoutForm()"></div>
+        
+        <!-- Kotak Formulir -->
+        <div class="bg-white p-6 rounded-xl shadow-2xl z-10 w-full max-w-md mx-4 transform transition-all scale-95 opacity-0 flex flex-col max-h-[90vh]" id="checkoutFormPanel">
+            
+            <div class="flex justify-between items-center mb-5 border-b pb-3">
+                <h3 class="text-lg font-bold text-gray-800"><i class="fa-solid fa-truck-fast text-green-600 mr-2"></i>Detail Pengiriman</h3>
+                <button onclick="closeCheckoutForm()" class="text-gray-400 hover:text-red-500 transition-colors"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+            
+            <!-- Area Form (Bisa di-scroll jika layar HP sangat kecil) -->
+            <div class="overflow-y-auto space-y-4 flex-1 pr-1">
+                <div class="bg-blue-50 text-blue-700 text-xs p-3 rounded-lg border border-blue-100 mb-2">
+                    <i class="fa-solid fa-circle-info mr-1"></i> Silakan lengkapi data berikut agar pesanan dapat segera diproses.
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-1.5">Nama Lengkap <span class="text-red-500">*</span></label>
+                    <input type="text" id="custName" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all shadow-sm" placeholder="Cth: Budi Santoso" required>
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-1.5">No. WhatsApp Aktif <span class="text-red-500">*</span></label>
+                    <input type="number" id="custPhone" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all shadow-sm" placeholder="Cth: 08123456789" required>
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-1.5">Alamat Lengkap <span class="text-red-500">*</span></label>
+                    <textarea id="custAddress" rows="3" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all shadow-sm" placeholder="Jalan, RT/RW, Desa, Kecamatan, Kab/Kota" required></textarea>
+                </div>
+            </div>
+
+            <!-- Tombol Final -->
+            <div class="mt-6 pt-4 border-t border-gray-100">
+                <button onclick="prosesCheckoutWhatsApp()" id="btnFinalCheckout" class="w-full bg-wa hover:bg-wa-dark text-white font-bold py-3.5 px-4 rounded-lg flex justify-center items-center gap-2 shadow-md transition-all transform hover:scale-[1.02]">
+                    <i class="fa-brands fa-whatsapp text-xl"></i> Lanjutkan ke WhatsApp
+                </button>
+            </div>
+            
         </div>
     </div>
 
