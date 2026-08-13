@@ -167,6 +167,24 @@
         </div>
     </footer>
 
+    <!-- Toast Notifikasi Keranjang ala Shopee -->
+    <!-- Wrapper Full Screen (Kunci posisi selalu di tengah menggunakan Flexbox) -->
+    <div class="fixed inset-0 z-[9999] flex items-center justify-center pointer-events-none">
+        
+        <!-- Kotak Toast -->
+        <div id="shopeeToast" class="flex flex-col items-center justify-center opacity-0 transition-all duration-300 scale-90 shadow-2xl px-8 py-6" style="background-color: rgba(70, 70, 70, 0.95); border-radius: 12px; min-width: 200px;">
+            
+            <div class="mb-3 text-white">
+                <!-- Ikon checkmark diubah menjadi putih polos agar mirip Shopee -->
+                <i class="fa-solid fa-circle-check text-5xl"></i>
+            </div>
+            
+            <p class="text-white text-sm font-medium tracking-wide whitespace-nowrap">Dimasukkan ke Keranjang</p>
+            
+        </div>
+        
+    </div>
+
     <!-- Panggil File JavaScript Modular Kita -->
     <!-- URUTAN SANGAT PENTING: supabase.js harus dipanggil sebelum katalog.js -->
     <script src="js/supabase.js"></script>
