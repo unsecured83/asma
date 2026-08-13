@@ -16,17 +16,87 @@ function escapeHTML(str) {
 }
 
 // ==========================================
-// 1. VERIFIKASI SESI ADMIN
+// UTILITAS PENCATAT ERROR KE CCTV
 // ==========================================
+async function catatLogError(konteks, errorObj) {
+    // 1. Cetak ke console browser (Untuk teknisi yang sedang menekan F12)
+    console.error(`[SYSTEM ERROR] ${konteks}:`, errorObj);
+    
+    try {
+        // 2. Ekstrak pesan error menjadi teks yang bisa dibaca
+        let pesanError = "Unknown Error";
+        if (errorObj instanceof Error) {
+            pesanError = errorObj.message;
+        } else if (typeof errorObj === 'object' && errorObj !== null) {
+            pesanError = JSON.stringify(errorObj);
+        } else {
+            pesanError = String(errorObj);
+        }
+
+        const emailAdmin = document.getElementById('profilAdminEmail')?.textContent || 'Sistem';
+        
+        // 3. Simpan paksa ke tabel log_aktivitas
+        await supabaseClient.from('log_aktivitas').insert([{
+            user_email: emailAdmin,
+            aksi: 'SYSTEM ERROR',
+            detail: `[Gagal ${konteks}] Detail: ${pesanError}`
+        }]);
+    } catch (e) {
+        // Jika gagal mencatat log (misal karena internet mati total), biarkan saja di console
+        console.warn("Gagal menyimpan log error ke database:", e);
+    }
+}
+
+// ==========================================
+// 1. VERIFIKASI SESI ADMIN & ROLE-BASED UI
+// ==========================================
+let userRole = 'admin'; // Variabel global untuk menyimpan role
+
 async function checkAuth() {
     const { data: { session } } = await supabaseClient.auth.getSession();
+    
     if (!session) {
         window.location.replace("login_page.html"); 
     } else {
+        // Tampilkan email yang sedang login
         const emailElemen = document.getElementById('profilAdminEmail');
         if (emailElemen) {
             emailElemen.textContent = session.user.email;
         }
+        
+        // 1. Ekstrak 'role' dari token JWT Supabase (disuntikkan oleh Trigger DB Anda)
+        userRole = session.user.app_metadata?.role || 'admin';
+        
+        // 2. Terapkan Batasan UI (Sembunyikan menu sesuai role)
+        terapkanBatasAksesUI(userRole);
+    }
+}
+checkAuth();
+
+// Fungsi Khusus Pengatur Tampilan Berdasarkan Hak Akses
+function terapkanBatasAksesUI(role) {
+    // A. Ubah teks di pojok kiri atas (di bawah nama toko)
+    const teksRole = document.getElementById('teksRoleAdmin');
+    if (teksRole) {
+        teksRole.textContent = role === 'superadmin' ? 'Super Admin' : 'Admin CS';
+        if (role === 'superadmin') {
+            teksRole.classList.add('text-purple-400'); // Beri warna berbeda untuk teknisi
+            teksRole.classList.remove('text-gray-400');
+        }
+    }
+
+    // B. Logika Eksekusi Pembatasan
+    if (role !== 'superadmin') {
+        // Jika bukan Superadmin, SEMBUNYIKAN menu yang tidak boleh diakses
+        const menuBanner = document.getElementById('nav-pengaturanBanner');
+        const menuToko = document.getElementById('nav-pengaturanToko');
+        const menuLog = document.getElementById('nav-logAktivitas');
+        
+        if (menuBanner) menuBanner.style.display = 'none';
+        if (menuToko) menuToko.style.display = 'none';
+        if (menuLog) menuLog.style.display = 'none';
+        
+        // Catatan: Tab 'Kelola Barang' dibiarkan tetap ada karena itu tugas utama Admin CS
     }
 }
 checkAuth();
@@ -416,6 +486,10 @@ function resetFormLengkap() {
     submitBtn.innerHTML = '<i class="fa-solid fa-check mr-2"></i> Simpan Barang';
     submitBtn.classList.replace('bg-blue-600', 'bg-green-600');
     submitBtn.classList.replace('hover:bg-blue-700', 'hover:bg-green-700');
+
+    // Reset visual peringatan kode barang
+    document.getElementById('peringatanKode').classList.add('hidden');
+    document.getElementById('kode_barang').classList.remove('border-red-500', 'focus:ring-red-500');
 }
 document.getElementById('btnReset').addEventListener('click', resetFormLengkap);
 
@@ -576,7 +650,7 @@ async function loadAdminProducts() {
     tableBody.innerHTML = `<tr><td colspan="7" class="px-6 py-10 text-center text-gray-500"><i class="fa-solid fa-spinner fa-spin text-3xl mb-3 text-green-500"></i><p class="text-sm font-medium">Memuat data...</p></td></tr>`;
 
     try {
-        const { data, error } = await supabaseClient.from('produk').select('*').order('created_at', { ascending: false });
+        const { data, error } = await supabaseClient.from('produk').select('*').order('urutan', { ascending: true }).order('created_at', { ascending: false });
         if (error) throw error;
         
         adminProductsData = data;
@@ -747,23 +821,65 @@ const kompresGambarToBlob = (file, maxWidth = 800, maxHeight = 800, quality = 0.
     });
 };
 
+// Fungsi pembantu mengecek duplikasi kode
+function isKodeDuplikat(kode) {
+    const kodeBersih = kode.trim().toLowerCase();
+    if (!kodeBersih) return false;
+    
+    // Cari di data yang sudah di-load dari Supabase
+    const ketemu = adminProductsData.find(p => p.kode.toLowerCase() === kodeBersih);
+    
+    // Pengecualian: Jika sedang ngedit, dan kodenya sama dengan kode aslinya, maka BUKAN duplikat
+    if (isEditing && ketemu && ketemu.kode === editingKode) {
+        return false;
+    }
+    return !!ketemu;
+}
+
+// Pantau ketikan admin secara langsung
+document.getElementById('kode_barang').addEventListener('input', function(e) {
+    const isDuplikat = isKodeDuplikat(e.target.value);
+    const peringatan = document.getElementById('peringatanKode');
+    
+    if (isDuplikat) {
+        peringatan.classList.remove('hidden');
+        e.target.classList.add('border-red-500', 'focus:ring-red-500');
+    } else {
+        peringatan.classList.add('hidden');
+        e.target.classList.remove('border-red-500', 'focus:ring-red-500');
+    }
+});
+
 // FUNGSI TAMBAH / EDIT BARANG
 document.getElementById('formTambahBarang').addEventListener('submit', async function(e) {
     e.preventDefault();
-    const btnSubmit = e.target.querySelector('button[type="submit"]');
-    const originalText = btnSubmit.innerHTML; 
 
+    // 1. CEK KATEGORI
     const cekKategori = document.getElementById('kategori_barang_terpilih').value;
     if (!cekKategori) {
         Swal.fire('Perhatian!', 'Silahkan pilih kategori barang terlebih dahulu.', 'warning');
         return; 
     }
 
+    // 2. CEGAT KODE DUPLIKAT (VALIDASI FAIL-FAST)
+    const kodeInputElem = document.getElementById('kode_barang');
+    const kodeInput = kodeInputElem.value;
+
+    if (isKodeDuplikat(kodeInput)) {
+        document.getElementById('peringatanKode').classList.remove('hidden');
+        kodeInputElem.classList.add('animate-shake', 'border-red-500');
+        kodeInputElem.focus();
+        setTimeout(() => { kodeInputElem.classList.remove('animate-shake'); }, 400);
+        return; 
+    }
+
+    // 3. JIKA AMAN, LANJUTKAN PROSES SIMPAN
+    const btnSubmit = e.target.querySelector('button[type="submit"]');
+    const originalText = btnSubmit.innerHTML; 
     btnSubmit.disabled = true;
 
     const file = fileYangDiunggah;
     let finalImageUrl = isEditing ? document.getElementById('image-preview').src : "https://placehold.co/400x400/1f2937/ffffff?text=No+Image";
-    const kodeInput = document.getElementById('kode_barang').value;
 
     if (file) {
         btnSubmit.innerHTML = `<i class="fa-solid fa-spinner fa-spin mr-2"></i> Mengunggah gambar...`;
@@ -774,12 +890,9 @@ document.getElementById('formTambahBarang').addEventListener('submit', async fun
             const kodeAman = kodeInput.replace(/[^a-zA-Z0-9]/g, '_');
             const fileName = `${kodeAman}_${Date.now()}.${ext}`;
             
-            const { data: uploadData, error: uploadError } = await supabaseClient.storage
+            const { error: uploadError } = await supabaseClient.storage
                 .from('katalog-gambar')
-                .upload(fileName, imageBlob, {
-                    cacheControl: '3600',
-                    upsert: true
-                });
+                .upload(fileName, imageBlob, { cacheControl: '3600', upsert: true });
             
             if (uploadError) throw uploadError;
 
@@ -787,7 +900,6 @@ document.getElementById('formTambahBarang').addEventListener('submit', async fun
                 .from('katalog-gambar')
                 .getPublicUrl(fileName);
             
-            // --- MODIFIKASI URL PROKSI UNTUK GAMBAR BARANG ---
             let proxyImageUrl = publicUrlData.publicUrl.replace(
                 'https://ydxffmteemrtaeenlaal.supabase.co/storage/v1/object/public',
                 'https://asmakwagean.my.id/cdn'
@@ -795,12 +907,15 @@ document.getElementById('formTambahBarang').addEventListener('submit', async fun
             finalImageUrl = proxyImageUrl + "?t=" + Date.now();
 
         } catch (err) {
-            Swal.fire('Error!', 'Gagal mengunggah gambar ke Cloud.', 'error');
-            btnSubmit.innerHTML = originalText; btnSubmit.disabled = false;
+            // --- MODIFIKASI LOG ERROR ---
+            catatLogError("Upload Gambar", err);
+            Swal.fire('Upload Gagal!', `Terjadi kesalahan jaringan atau sesi habis. Detail: ${err.message || 'Unknown'}`, 'error');
+            // ----------------------------
+            btnSubmit.innerHTML = originalText; 
+            btnSubmit.disabled = false;
             return;
         }
     }
-
     btnSubmit.innerHTML = `<i class="fa-solid fa-spinner fa-spin mr-2"></i> Menyimpan data...`;
     
     const produkData = {
@@ -809,7 +924,7 @@ document.getElementById('formTambahBarang').addEventListener('submit', async fun
         harga: document.getElementById('harga').value,
         gambar: finalImageUrl,
         varian: getVariasiString(),
-        kategori: document.getElementById('kategori_barang_terpilih').value
+        kategori: cekKategori
     };
 
     try {
@@ -821,17 +936,13 @@ document.getElementById('formTambahBarang').addEventListener('submit', async fun
             const { error: dbError } = await supabaseClient.from('produk').update(produkData).eq('kode', editingKode);
             if (dbError) throw dbError;
             
-            // PERBAIKAN: Bersihkan parameter '?t=' untuk gambar lama yang akan ditimpa
             if (isNewImageUploaded && oldImageUrl) {
                 const oldFileNameDenganQuery = oldImageUrl.split('/').pop();
                 const oldFileNameAsli = oldFileNameDenganQuery.split('?')[0];
                 
                 supabaseClient.storage.from('katalog-gambar').remove([oldFileNameAsli])
-                    .then(({error}) => { 
-                        if(error) console.warn("Peringatan: Gagal membersihkan gambar lama:", error); 
-                    });
+                    .catch(err => console.warn("Peringatan: Gagal membersihkan gambar lama:", err));
             }
-
             Swal.fire('Berhasil!', 'Barang berhasil diperbarui!', 'success');
         } else {
             const { error: dbError } = await supabaseClient.from('produk').insert([produkData]);
@@ -845,9 +956,13 @@ document.getElementById('formTambahBarang').addEventListener('submit', async fun
         resetFormLengkap();
         loadAdminProducts(); 
     } catch (error) { 
-        Swal.fire('Gagal!', error.message || 'Gagal menyimpan barang ke database.', 'error');
+        // --- MODIFIKASI LOG ERROR ---
+        catatLogError("Simpan Database", error);
+        Swal.fire('Penyimpanan Gagal!', `Detail: ${error.message || 'Gagal menyimpan barang ke database.'}`, 'error');
+        // ----------------------------
     } finally { 
-        btnSubmit.innerHTML = originalText; btnSubmit.disabled = false; 
+        btnSubmit.innerHTML = originalText; 
+        btnSubmit.disabled = false; 
     }
 });
 
@@ -991,7 +1106,7 @@ function editBarang(item) {
     editingKode = item.kode;
 
     document.getElementById('kode_barang').value = item.kode;
-    document.getElementById('kode_barang').disabled = true; 
+    document.getElementById('kode_barang').disabled = false; 
     document.getElementById('nama_barang').value = item.nama;
     document.getElementById('harga').value = item.harga;
 
@@ -1074,3 +1189,116 @@ userEvents.forEach(event => {
 
 // Mulai perhitungan mundur saat halaman pertama kali dimuat
 resetInactivityTimer();
+
+// ==========================================
+// 8. FITUR DRAG & DROP URUTAN BARANG
+// ==========================================
+let sortableInstance = null;
+
+function bukaModalUrutan() {
+    const modal = document.getElementById('modalUrutan');
+    const listContainer = document.getElementById('listUrutanBarang');
+    listContainer.innerHTML = '';
+
+    if (currentFilteredAdminData.length === 0) {
+        Swal.fire('Info', 'Tidak ada barang yang tampil untuk diurutkan.', 'info');
+        return;
+    }
+
+    currentFilteredAdminData.forEach(item => {
+        const amanKode = escapeHTML(item.kode);
+        const amanNama = escapeHTML(item.nama);
+        const amanGambar = escapeHTML(item.gambar);
+        
+        const div = document.createElement('div');
+        div.className = 'bg-white rounded-lg overflow-hidden transition-transform duration-200 group flex flex-col relative hover:-translate-y-1';
+        div.dataset.kode = item.kode;
+        
+        div.style.border = '2px solid #22c55e'; 
+        div.style.boxShadow = '0 0 12px rgba(34, 197, 94, 0.4)'; 
+        
+        div.innerHTML = `
+            <!-- Area Gambar Utama -->
+            <div class="relative w-full bg-gray-50 overflow-hidden border-b border-green-200" style="padding-top: 100%;">
+                
+                <!-- BROWSER DRAG DIMATIKAN: draggable="false" mencegah browser menarik gambar biasa -->
+                <img src="${amanGambar}" draggable="false" class="absolute inset-0 w-full h-full object-cover select-none">
+                
+                <div class="absolute inset-0 bg-green-900 opacity-0 group-hover:opacity-10 transition-opacity pointer-events-none"></div>
+                
+                <!-- TOMBOL DRAG HANDLE (Menggunakan style inline agar dijamin 100% muncul) -->
+                <div class="handle-drag absolute flex items-center justify-center cursor-grab active:cursor-grabbing z-20 transition-colors" 
+                     style="top: 8px; right: 8px; width: 30px; height: 30px; background-color: #ffffff; border-radius: 6px; border: 1px solid #22c55e; color: #16a34a; box-shadow: 0 2px 4px rgba(0,0,0,0.15);" 
+                     title="Tahan dan Geser">
+                    <i class="fa-solid fa-grip-vertical text-sm"></i>
+                </div>
+            </div>
+            
+            <!-- Area Teks -->
+            <div class="p-2.5 bg-white flex-1 flex flex-col pointer-events-none">
+                <p class="text-[9px] font-bold text-green-600 tracking-wider uppercase mb-0.5">${amanKode}</p>
+                <p class="text-xs font-semibold text-gray-800 line-clamp-2 leading-tight" title="${amanNama}">${amanNama}</p>
+            </div>
+        `;
+        listContainer.appendChild(div);
+    });
+
+    modal.classList.remove('hidden');
+    document.body.style.overflow = 'hidden'; 
+
+    // Inisialisasi library SortableJS
+    if (sortableInstance) { sortableInstance.destroy(); }
+    sortableInstance = new Sortable(listContainer, {
+        handle: '.handle-drag', // Sistem HANYA akan menarik kartu jika tombol pojok ditekan
+        animation: 250,
+        ghostClass: 'opacity-40', 
+        chosenClass: 'scale-105', 
+        dragClass: 'shadow-2xl',  
+        
+        scroll: document.getElementById('modalUrutan'), 
+        scrollSensitivity: 80,   
+        scrollSpeed: 20,         
+        bubbleScroll: true
+        // PASTIKAN: forceFallback: true sudah DIHAPUS agar bisa digeser-geser.
+    });
+}
+
+function tutupModalUrutan() {
+    document.getElementById('modalUrutan').classList.add('hidden');
+    // Mengembalikan fungsi scroll halaman utama
+    document.body.style.overflow = ''; 
+}
+
+async function simpanUrutanBarang() {
+    const listItems = document.querySelectorAll('#listUrutanBarang > div');
+    const btn = document.getElementById('btnSimpanUrutan');
+    const originalText = btn.innerHTML;
+
+    btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin mr-2"></i> Menyimpan...`;
+    btn.disabled = true;
+
+    try {
+        // MODIFIKASI: Menambahkan 'async' dan 'throw error' agar kegagalan terdeteksi
+        const promises = Array.from(listItems).map(async (li, index) => {
+            const kode = li.dataset.kode;
+            const { error } = await supabaseClient.from('produk')
+                .update({ urutan: index + 1 })
+                .eq('kode', kode);
+            
+            // Wajib dilempar agar tertangkap oleh 'catch' di bawah jika SQL gagal
+            if (error) throw error; 
+        });
+
+        await Promise.all(promises);
+        
+        Swal.fire('Tersimpan!', 'Urutan etalase berhasil dirapikan.', 'success');
+        tutupModalUrutan();
+        loadAdminProducts(); 
+    } catch (error) {
+        catatLogError("Simpan Urutan Barang", error);
+        Swal.fire('Penyimpanan Gagal', 'Kemungkinan kolom "urutan" belum dibuat di database. Detail: ' + (error.message || error), 'error');
+    } finally {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+    }
+}

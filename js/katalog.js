@@ -134,6 +134,7 @@ async function fetchProducts(page = 1, append = false, keyword = '') {
         let query = supabaseClient
             .from('produk')
             .select('*', { count: 'exact' })
+            .order('urutan', { ascending: true })
             .order('created_at', { ascending: false })
             .range(startIndex, endIndex);
 
@@ -307,6 +308,27 @@ function updateCartBadge() {
     localStorage.setItem('tokoku_cart', JSON.stringify(shoppingCart));
 }
 
+// --- FITUR BARU: Animasi Toast ala Shopee ---
+let cartToastTimeout;
+function showCartToast() {
+    const toast = document.getElementById('shopeeToast');
+    if (!toast) return;
+    
+    // Reset timer jika pembeli mengeklik tambah secara brutal/berulang-ulang
+    clearTimeout(cartToastTimeout);
+    
+    // Munculkan pop-up (Animasi membesar dan jelas)
+    toast.classList.remove('opacity-0', 'scale-90');
+    toast.classList.add('opacity-100', 'scale-100');
+    
+    // Sembunyikan otomatis setelah 1.5 detik
+    cartToastTimeout = setTimeout(() => {
+        toast.classList.remove('opacity-100', 'scale-100');
+        toast.classList.add('opacity-0', 'scale-90');
+    }, 1500);
+}
+
+// --- MODIFIKASI: Menambahkan pemanggilan showCartToast() ---
 window.addToCart = (id, nama, harga, gambar, varian = '') => {
     const cartItemId = varian ? `${id}-${varian}` : id;
     
@@ -322,6 +344,9 @@ window.addToCart = (id, nama, harga, gambar, varian = '') => {
     const badge = document.getElementById('cartBadge');
     badge.classList.add('scale-150');
     setTimeout(() => badge.classList.remove('scale-150'), 200);
+
+    // Panggil notifikasi layar tengah di sini
+    showCartToast();
 };
 
 window.removeFromCart = (cartItemId) => {
