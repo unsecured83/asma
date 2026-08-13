@@ -581,8 +581,8 @@ window.prosesCheckoutWhatsApp = async () => {
         teksPesan += `*TOTAL PESANAN: ${formatRupiah(totalHargaReal)}*\n\n`;
         teksPesan += `Mohon instruksi untuk pembayaran & ongkos kirimnya. Terima kasih.`;
         
-        // Buka WhatsApp
-        window.open(`https://wa.me/${waTarget}?text=${encodeURIComponent(teksPesan)}`, '_blank');
+        // Buka WhatsApp (Menggunakan direct redirect agar lolos Popup Blocker iOS/Safari)
+        window.location.href = `https://wa.me/${waTarget}?text=${encodeURIComponent(teksPesan)}`;
         
         // Tutup Modal Form
         window.closeCheckoutForm();
