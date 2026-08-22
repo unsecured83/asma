@@ -901,7 +901,7 @@ document.getElementById('formTambahBarang').addEventListener('submit', async fun
                 .getPublicUrl(fileName);
             
             let proxyImageUrl = publicUrlData.publicUrl.replace(
-                'https://ydxffmteemrtaeenlaal.supabase.co/storage/v1/object/public',
+                'https://hgbgghngbvxyqwugwhrw.supabase.co/storage/v1/object/public',
                 'https://asmakwagean.my.id/cdn'
             );
             finalImageUrl = proxyImageUrl + "?t=" + Date.now();
